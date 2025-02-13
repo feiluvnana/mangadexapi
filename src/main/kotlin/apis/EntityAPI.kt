@@ -1,17 +1,22 @@
 package apis
 
-import types.Entity
-import types.Response
+import types.*
+import java.util.*
 
 class EntityAPI(api: IRetrofitAPI) {
-    val manga = Manga(api)
-    val tag = Tag(api)
 
-    class Manga(private val api: IRetrofitAPI) {
-        suspend fun random(): Response.Entity<Entity.Manga> = api.mangaRandom().entity()
+    val manga = MangaEndpoint(api)
+    val tag = TagEndpoint(api)
+
+    class MangaEndpoint(private val api: IRetrofitAPI) {
+        suspend operator fun invoke(): CollectionResponse<Manga> = api.manga().ok().collection()
+
+        suspend operator fun invoke(id: UUID): EntityResponse<Manga> = api.manga(id).ok().entity()
+
+        suspend fun random(): EntityResponse<Manga> = api.mangaRandom().ok().entity()
     }
 
-    class Tag(private val api: IRetrofitAPI) {
-        suspend operator fun invoke(): Response.Collection<Entity.Tag> = api.mangaTag().collection()
+    class TagEndpoint(private val api: IRetrofitAPI) {
+        suspend operator fun invoke(): CollectionResponse<Tag> = api.mangaTag().ok().collection()
     }
 }
