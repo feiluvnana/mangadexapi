@@ -2,25 +2,6 @@ package types
 
 import com.fasterxml.jackson.annotation.JsonProperty
 
-enum class ResultType {
-    @JsonProperty("ok")
-    OK,
-
-    @JsonProperty("error")
-    ERROR
-}
-
-enum class ResponseType {
-    @JsonProperty("entity")
-    ENTITY,
-
-    @JsonProperty("collection")
-    COLLECTION,
-
-    @JsonProperty("server_url")
-    SERVER_URL
-}
-
 enum class EntityType {
     @JsonProperty("tag")
     TAG,

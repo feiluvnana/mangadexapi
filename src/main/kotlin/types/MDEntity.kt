@@ -1,23 +1,15 @@
 package types
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties
-import com.fasterxml.jackson.annotation.JsonSubTypes
-import com.fasterxml.jackson.annotation.JsonTypeInfo
+import com.fasterxml.jackson.core.JsonParseException
+import com.fasterxml.jackson.core.JsonParser
+import com.fasterxml.jackson.databind.DeserializationContext
+import com.fasterxml.jackson.databind.JsonDeserializer
 import java.util.*
 
-@JsonTypeInfo(
-    use = JsonTypeInfo.Id.NAME,
-    include = JsonTypeInfo.As.PROPERTY,
-    property = "type"
-)
-@JsonSubTypes(
-    JsonSubTypes.Type(value = Tag::class, name = "tag"),
-    JsonSubTypes.Type(value = Manga::class, name = "manga")
-)
-@JsonIgnoreProperties(ignoreUnknown = true)
-sealed class MDEntity(val id: UUID = UUID.randomUUID(), val type: EntityType = EntityType.TAG)
+sealed class MDEntity(val id: UUID = UUID.randomUUID())
 
-data class Tag(val attributes: TagAttributes = TagAttributes()) : MDEntity()
+data class Tag(val attributes: TagAttributes = TagAttributes(), val relationships: List<MDEntity> = listOf()) :
+    MDEntity()
 
 data class TagAttributes(
     val name: Map<String, String> = mapOf(),
@@ -26,8 +18,28 @@ data class TagAttributes(
     val version: Int = 0
 )
 
-data class Manga(val attributes: MangaAttributes) : MDEntity()
+data class Manga(val attributes: MangaAttributes = MangaAttributes()) : MDEntity()
 
 data class MangaAttributes(
-    val title: Map<String, String>
+    val title: Map<String, String> = mapOf(),
+    val altTitles: List<Map<String, String>> = listOf(),
 )
+
+class MDEntityDeserializer : JsonDeserializer<MDEntity>() {
+    override fun deserialize(p: JsonParser, ctxt: DeserializationContext?): MDEntity {
+        val node = ctxt!!.readTree(p)
+        val type = node.get("type").asText()
+        val attributesNode = node.get("attributes")
+        return when {
+            type == "tag" && attributesNode != null -> Tag(
+                attributes = ctxt.parser.codec.treeToValue(attributesNode, TagAttributes::class.java)
+            )
+
+            type == "manga" && attributesNode != null -> Manga(
+                attributes = ctxt.parser.codec.treeToValue(attributesNode, MangaAttributes::class.java)
+            )
+
+            else -> throw JsonParseException("MDResponseDeserializer: Unknown result type.")
+        }
+    }
+}

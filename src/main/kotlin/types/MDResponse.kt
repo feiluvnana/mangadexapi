@@ -8,8 +8,7 @@ import com.fasterxml.jackson.databind.JsonDeserializer
 import com.fasterxml.jackson.databind.node.ObjectNode
 import retrofit2.Response
 
-
-sealed class MDResponse<T>(val result: ResultType = ResultType.OK)
+sealed class MDResponse<T>
 
 fun <T> Response<MDResponse<T>>.ok(): OkResponse<T> {
     @Suppress("UNCHECKED_CAST")
@@ -24,7 +23,7 @@ fun <T> Response<MDResponse<T>>.ok(): OkResponse<T> {
     }
 }
 
-data class ErrorResponse<T>(val errors: List<ErrorDetail> = listOf()) : MDResponse<T>(result = ResultType.ERROR) {
+data class ErrorResponse<T>(val errors: List<ErrorDetail> = listOf()) : MDResponse<T>() {
     data class ErrorDetail(
         val id: String = "<id>",
         val status: Int = 0,
@@ -34,8 +33,7 @@ data class ErrorResponse<T>(val errors: List<ErrorDetail> = listOf()) : MDRespon
     )
 }
 
-sealed class OkResponse<T>(val response: ResponseType = ResponseType.SERVER_URL) :
-    MDResponse<T>(result = ResultType.OK) {
+sealed class OkResponse<T> : MDResponse<T>() {
     fun collection(): CollectionResponse<T> {
         when (this) {
             is CollectionResponse<T> -> return this
@@ -58,15 +56,14 @@ sealed class OkResponse<T>(val response: ResponseType = ResponseType.SERVER_URL)
     }
 }
 
-data class EntityResponse<T>(@Suppress("UNCHECKED_CAST") val data: T = null as T) :
-    OkResponse<T>(response = ResponseType.ENTITY)
+data class EntityResponse<T>(@Suppress("UNCHECKED_CAST") val data: T = null as T) : OkResponse<T>()
 
 data class CollectionResponse<T>(
     val data: List<T> = listOf(),
     val limit: Int = 0,
     val offset: Int = 0,
     val total: Int = 0
-) : OkResponse<T>(response = ResponseType.COLLECTION)
+) : OkResponse<T>()
 
 data class ServerUrlResponse(
     val baseUrl: String = "<baseUrl>",
@@ -80,20 +77,35 @@ data class ServerUrlResponse(
 }
 
 class MDResponseDeserializer : JsonDeserializer<MDResponse<*>>() {
-    override fun deserialize(p0: JsonParser, p1: DeserializationContext?): MDResponse<*> {
-        val node = p0.codec.readTree<ObjectNode>(p0)
+    override fun deserialize(p: JsonParser, ctxt: DeserializationContext?): MDResponse<*> {
+        val node = ctxt!!.readTree(p) as ObjectNode
         return when (node.get("result").asText()) {
             "ok" -> {
-                val responseNode = node.get("response")
-                when {
-                    responseNode == null -> p0.codec.treeToValue(node, ServerUrlResponse::class.java)
-                    responseNode.asText() == "collection" -> p0.codec.treeToValue(node, CollectionResponse::class.java)
-                    responseNode.asText() == "entity" -> p0.codec.treeToValue(node, EntityResponse::class.java)
+                when (node.get("response")?.asText()) {
+                    null -> ctxt.readValue(node.traverse(), ServerUrlResponse::class.java)
+
+                    "collection" -> {
+                        val data =
+                            ctxt.parser.codec.treeToValue(node.get("data"), List::class.java).map {
+                                Mangadex.objectMapper.convertValue(it, MDEntity::class.java)
+                            }
+                        CollectionResponse(
+                            data = data,
+                            limit = ctxt.parser.codec.treeToValue(node.get("limit"), Int::class.java),
+                            offset = ctxt.parser.codec.treeToValue(node.get("offset"), Int::class.java),
+                            total = ctxt.parser.codec.treeToValue(node.get("total"), Int::class.java)
+                        )
+                    }
+
+                    "entity" -> EntityResponse(
+                        data = ctxt.parser.codec.treeToValue(node.get("data"), MDEntity::class.java)
+                    )
+
                     else -> throw JsonParseException("MDResponseDeserializer: Unknown response type.")
                 }
             }
 
-            "error" -> p0.codec.treeToValue(node, ErrorResponse::class.java)
+            "error" -> p.codec.readValue(node.traverse(), ErrorResponse::class.java)
             else -> throw JsonParseException("MDResponseDeserializer: Unknown result type.")
         }
     }

@@ -6,19 +6,24 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.module.SimpleModule
 import retrofit2.Retrofit
 import retrofit2.converter.jackson.JacksonConverterFactory
+import types.MDEntity
+import types.MDEntityDeserializer
 import types.MDResponse
 import types.MDResponseDeserializer
 
 suspend fun main() {
-    println(Mangadex.entity.manga())
-    Int.hashCode()
+    print(Mangadex.entity.manga().data[0].attributes)
 }
 
 class Mangadex {
     companion object {
         val objectMapper: ObjectMapper = ObjectMapper()
-            .registerModule(SimpleModule().addDeserializer(MDResponse::class.java, MDResponseDeserializer()))
             .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+            .registerModule(
+                SimpleModule()
+                    .addDeserializer(MDResponse::class.java, MDResponseDeserializer())
+                    .addDeserializer(MDEntity::class.java, MDEntityDeserializer())
+            )
         private val retrofit = Retrofit.Builder()
             .baseUrl("https://api.mangadex.org")
             .addConverterFactory(JacksonConverterFactory.create(objectMapper))
