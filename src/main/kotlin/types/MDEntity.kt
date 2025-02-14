@@ -6,9 +6,9 @@ import com.fasterxml.jackson.databind.DeserializationContext
 import com.fasterxml.jackson.databind.JsonDeserializer
 import java.util.*
 
-sealed class MDEntity(val id: UUID = UUID.randomUUID())
+sealed class MDEntity(val id: UUID = UUID.randomUUID(), val relationships: List<Relationship> = listOf())
 
-data class Tag(val attributes: TagAttributes = TagAttributes(), val relationships: List<MDEntity> = listOf()) :
+data class Tag(val attributes: TagAttributes = TagAttributes()) :
     MDEntity()
 
 data class TagAttributes(
@@ -25,19 +25,17 @@ data class MangaAttributes(
     val altTitles: List<Map<String, String>> = listOf(),
 )
 
+data class Relationship(val type: EntityType = EntityType.TAG) : MDEntity()
+
 class MDEntityDeserializer : JsonDeserializer<MDEntity>() {
     override fun deserialize(p: JsonParser, ctxt: DeserializationContext?): MDEntity {
         val node = ctxt!!.readTree(p)
         val type = node.get("type").asText()
         val attributesNode = node.get("attributes")
         return when {
-            type == "tag" && attributesNode != null -> Tag(
-                attributes = ctxt.parser.codec.treeToValue(attributesNode, TagAttributes::class.java)
-            )
+            type == "tag" && attributesNode != null -> ctxt.parser.codec.treeToValue(node, Tag::class.java)
 
-            type == "manga" && attributesNode != null -> Manga(
-                attributes = ctxt.parser.codec.treeToValue(attributesNode, MangaAttributes::class.java)
-            )
+            type == "manga" && attributesNode != null -> ctxt.parser.codec.treeToValue(node, Manga::class.java)
 
             else -> throw JsonParseException("MDResponseDeserializer: Unknown result type.")
         }

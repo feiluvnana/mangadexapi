@@ -1,27 +1,13 @@
 package types
 
-import Mangadex
 import com.fasterxml.jackson.core.JsonParseException
 import com.fasterxml.jackson.core.JsonParser
 import com.fasterxml.jackson.databind.DeserializationContext
 import com.fasterxml.jackson.databind.JsonDeserializer
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ObjectNode
-import retrofit2.Response
 
 sealed class MDResponse<T>
-
-fun <T> Response<MDResponse<T>>.ok(): OkResponse<T> {
-    @Suppress("UNCHECKED_CAST")
-    val body: MDResponse<T>? = if (this.isSuccessful) body() else Mangadex.objectMapper.readValue(
-        errorBody()?.string(),
-        ErrorResponse::class.java
-    ) as? MDResponse<T>
-    when (body) {
-        is ErrorResponse<T> -> throw MDAPIException(body)
-        is OkResponse<T> -> return body
-        else -> throw WTFException("ok() failed. The type is ${this::class}")
-    }
-}
 
 data class ErrorResponse<T>(val errors: List<ErrorDetail> = listOf()) : MDResponse<T>() {
     data class ErrorDetail(
@@ -79,33 +65,34 @@ data class ServerUrlResponse(
 class MDResponseDeserializer : JsonDeserializer<MDResponse<*>>() {
     override fun deserialize(p: JsonParser, ctxt: DeserializationContext?): MDResponse<*> {
         val node = ctxt!!.readTree(p) as ObjectNode
-        return when (node.get("result").asText()) {
-            "ok" -> {
-                when (node.get("response")?.asText()) {
-                    null -> ctxt.readValue(node.traverse(), ServerUrlResponse::class.java)
+        val result = node.get("result")?.asText()
+        val response = node.get("response")?.asText()
 
-                    "collection" -> {
-                        val data =
-                            ctxt.parser.codec.treeToValue(node.get("data"), List::class.java).map {
-                                Mangadex.objectMapper.convertValue(it, MDEntity::class.java)
-                            }
-                        CollectionResponse(
-                            data = data,
-                            limit = ctxt.parser.codec.treeToValue(node.get("limit"), Int::class.java),
-                            offset = ctxt.parser.codec.treeToValue(node.get("offset"), Int::class.java),
-                            total = ctxt.parser.codec.treeToValue(node.get("total"), Int::class.java)
-                        )
+        val chapterNode = node.get("chapter")
+        return when {
+            result == "ok" && response == null && chapterNode != null -> ctxt.readValue(
+                node.traverse(),
+                ServerUrlResponse::class.java
+            )
+
+            result == "ok" && response == "collection" -> {
+                val data =
+                    ctxt.parser.codec.treeToValue(node.get("data"), List::class.java).map {
+                        (ctxt.parser.codec as ObjectMapper).convertValue(it, MDEntity::class.java)
                     }
-
-                    "entity" -> EntityResponse(
-                        data = ctxt.parser.codec.treeToValue(node.get("data"), MDEntity::class.java)
-                    )
-
-                    else -> throw JsonParseException("MDResponseDeserializer: Unknown response type.")
-                }
+                CollectionResponse(
+                    data = data,
+                    limit = ctxt.parser.codec.treeToValue(node.get("limit"), Int::class.java),
+                    offset = ctxt.parser.codec.treeToValue(node.get("offset"), Int::class.java),
+                    total = ctxt.parser.codec.treeToValue(node.get("total"), Int::class.java)
+                )
             }
 
-            "error" -> p.codec.readValue(node.traverse(), ErrorResponse::class.java)
+            result == "ok" && response == "entity" -> EntityResponse(
+                data = ctxt.parser.codec.treeToValue(node.get("data"), MDEntity::class.java)
+            )
+
+            result == "error" -> p.codec.readValue(node.traverse(), ErrorResponse::class.java)
             else -> throw JsonParseException("MDResponseDeserializer: Unknown result type.")
         }
     }

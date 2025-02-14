@@ -1,6 +1,6 @@
 package apis
 
-import types.ok
+import Mangadex.Companion.ok
 import java.util.*
 
 class AtHomeAPI(private val api: IRetrofitAPI) {

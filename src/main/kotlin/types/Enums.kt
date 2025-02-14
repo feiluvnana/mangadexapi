@@ -7,7 +7,28 @@ enum class EntityType {
     TAG,
 
     @JsonProperty("manga")
-    MANGA
+    MANGA,
+
+    @JsonProperty("author")
+    AUTHOR,
+
+    @JsonProperty("manga_relation")
+    MANGA_RELATION,
+
+    @JsonProperty("scanlation_group")
+    SCANLATION_GROUP,
+
+    @JsonProperty("cover_art")
+    COVER_ART,
+
+    @JsonProperty("chapter")
+    CHAPTER,
+
+    @JsonProperty("artist")
+    ARTIST,
+
+    @JsonProperty("creator")
+    CREATOR,
 }
 
 enum class TagGroup {
